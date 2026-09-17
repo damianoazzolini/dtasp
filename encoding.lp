@@ -34,7 +34,7 @@ odd(N):- id(N), N\2 = 1.
 1{index(Node,Id) : node(Node)}1:- id(Id).
 % each node has exactly one index
 :- node(N), not index(N,_).
-:- index(N0, Id), index(N1, Id), N0 != N1. % this may prune nothing
+% :- index(N0, Id), index(N1, Id), N0 != N1. % this prunes nothing
 % top node always has index 1
 
 % left child of a node: even([index+1, min(2*index, size-1)])
@@ -79,11 +79,14 @@ internal(Index):- index(_,Index), right(Index,_), left(Index,_).
 :- index(_,Index), not internal(Index), not terminal(Index).
 
 % connectivity constraints
-reachable(1).
-reachable(Index):- index(_,Index), Index > 1, index(_,IndexParent), left(IndexParent,Index), reachable(IndexParent).
-reachable(Index):- index(_,Index), Index > 1, index(_,IndexParent), right(IndexParent,Index), reachable(IndexParent).
-% :- terminal(Index), not reachable(Index).
-:- index(_,Index), not reachable(Index).
+% reachable(1).
+% reachable(Index):- index(_,Index), Index > 1, index(_,IndexParent), left(IndexParent,Index), reachable(IndexParent).
+% reachable(Index):- index(_,Index), Index > 1, index(_,IndexParent), right(IndexParent,Index), reachable(IndexParent).
+% % :- terminal(Index), not reachable(Index).
+% :- index(_,Index), not reachable(Index).
+% can I replace the reachable construction with a constraint over the number of terminals?
+% leaves = 1 + internal nodes
+:- #count{N : terminal(N)} = CT, #count{N : internal(N)} = CI, CT != CI + 1.
 
 % class assignments
 class(Index,positive):- index(_,Index), terminal(Index), left(_,Index).
@@ -97,12 +100,13 @@ class(Index,negative):- index(_,Index), terminal(Index), right(_,Index).
 1{internal_feature(Index,Feature) : feature(Feature)}1:- internal(Index).
 % assume a feature is used only once -- this is not correct, prunes too much
 % :- internal_feature(Index0,Feature), internal_feature(Index1,Feature), Index0 != Index1.
+% pruning: a feature cannot be used more than > internal nodes - 1 times, can we improve this?
 
-% TODO improvement: the leaves cannot have all the same class, otherwise the tree is useless
-:- #count{Index : class(Index,positive)} = 0.
-:- #count{Index : class(Index,negative)} = 0.
-
-% TODO improvement: impose a depth limit?
+% pruning: the leaves cannot have all the same class, otherwise the tree is useless
+% :- #count{Index : class(Index,positive)} = 0.
+% :- #count{Index : class(Index,negative)} = 0.
+:- not class(_,positive).
+:- not class(_,negative).
 
 % The root is reached by every example
 reaches(E, 1) :-
@@ -138,6 +142,10 @@ classified(E, Class) :-
    Actual != Expected.
 
 % #show classified/2.
+% prune: two nodes in the same paths cannot have the same feature - this makes everything slow
+% :- reaches(E, Node0), reaches(E, Node1), internal_feature(Node0, Feature), internal_feature(Node1, Feature), Node0 != Node1.
+
+% TODO improvement: impose a depth limit?
 
 %%%%%%%%%% below wrong
 % % compute classification of examples based on the tree structure and feature assignments
