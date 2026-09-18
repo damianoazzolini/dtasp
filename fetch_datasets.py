@@ -7,7 +7,7 @@ import pandas as pd
 from sklearn.datasets import fetch_openml
 
 # mode = "skl"
-mode = "pmlb"
+mode = "skl"
 
 # Returns NumPy arrays
 if mode == "pmlb":
@@ -29,10 +29,26 @@ elif mode == "skl":
     # X, y = spect.data, spect.target
 
     # dataset = fetch_openml('kr-vs-kp', version=1, as_frame=True)
-    dataset = fetch_openml('monks-problems-1', version=1, as_frame=True)
-    # convert categorical board conditions to boolean
+    # dataset = fetch_openml('monks-problems-3', version=1, as_frame=True)
+    # dataset = fetch_openml('audiology', as_frame=True, version=2)
+    # dataset = fetch_openml('australian', as_frame=True)
+    # dataset = fetch_openml('breast-w', as_frame=True) # missing values
+    # dataset = fetch_openml('diabetes', as_frame=True)
+    # dataset = fetch_openml('kr-vs-kp', as_frame=True)
+    # dataset = fetch_openml('tic-tac-toe', as_frame=True)
+    # dataset = fetch_openml('yeast', as_frame=True, version=4)
+    dataset = fetch_openml('zoo', as_frame=True)
+    # print(dataset)
+    # convert categoricalto boolean
+    # sys.exit()
     X = pd.get_dummies(dataset.data, drop_first=True)
     y = dataset.target
+    print(y)
+    sys.exit()
+    # rename P with positive and N with negative in the target column
+    # y = y.map({'P': 1, 'N': 0}) # for audiology
+    # y = y.map({'tested_positive': 1, 'tested_negative': 0}) # for audiology
+    # y = y.map({'positive': 1, 'negative': 0}) # for audiology
 
     # make X and y such that the below works
     X = X.values
@@ -73,7 +89,7 @@ if print_facts:
 
 # fit a decision tree classifier to the data and print the tree
 
-clf = DecisionTreeClassifier(random_state=0) #, criterion='entropy', max_depth=1)
+clf = DecisionTreeClassifier() #, criterion='entropy', max_depth=1)
 clf.fit(X, y)
 tree_rules = export_text(clf, feature_names=[f"f{i+1}" for i in range(len(X[0]))])
 # append % before each line of the tree rules
