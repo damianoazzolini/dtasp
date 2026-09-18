@@ -1,54 +1,55 @@
-% must be odd
-% with this version, you get sat only for the optimal size
-% #const size=11. 
-% search for the best size
-% avail_sizes(1..21).
-% 1{size(S) : avail_sizes(S), S\2 = 1}1.
-
-% :~ size(S). [S@1,S]
-
-% size(7).
 
 % the max size (internal + leaves) is 2^(n+1) - 1, where n is the number of features
-
-% letters for debug
-% node(a).
-% node(b).
-% node(c).
-% node(d).
-% node(e).
-% index(a,1).
-% node(1..size).
-% id(1..size).
-% id(1..S):- size(S).
-% index(1,1).
+% this also applies for max depth
+% N = 2 -> 2^(2+1) - 1 = 7
+% N = 3 -> 2^(3+1) - 1 = 15
+% N = 4 -> 2^(4+1) - 1 = 31
 
 % the size is the total number of nodes (internal + leaves)
-size(77).
+% size(15).
 node(1..S):- size(S).
 
 even(N):- node(N), N\2 = 0.
 odd(N):- node(N), N\2 = 1.
 
+% alternative: each node can be either internal or terminal
+% then, avail left and right only for internal nodes
+
+% additional -1 as 1 is internal by definition
+n_internal(N):- V = #max{ A : node(A)}, N = ((V-1)/2) - 1.
+internal(1).
+V{internal(N) : node(N), N != 1}V :- n_internal(V).
+terminal(N):- node(N), not internal(N).
+
+% The number of terminal nodes must be balanced between even and odd indexes
+% is this correct?
+% n_terminal_even(N):- N = #count{X : terminal(X), X\2 = 0}.
+% n_terminal_odd(N):- N = #count{X : terminal(X), X\2 = 1}.
+% :- n_terminal_even(NE), n_terminal_odd(NO), NE > NO + 1.
+% :- n_terminal_odd(NO), n_terminal_even(NE), NO > NE + 1.
+
+
 
 % left child of a node: even([index+1, min(2*index, size-1)])
 avail_left(Index,IndexLeft):-
     size(Size),
-    node(Index),
+    internal(Index),
     even(IndexLeft),
     IndexLeft >= Index + 1,
     IndexLeft <= min(2*Index,Size-1).      
 avail_right(Index,IndexRight):-
     size(Size),
-    node(Index),
+    internal(Index),
     odd(IndexRight),
     IndexRight >= Index + 2,
     IndexRight <= min(2*Index+1,Size).    
     % IndexRight <= min(2*Index+1,size).
 
+
+        
 % left and right child for each node
-0{left(Index,IndexLeft) : avail_left(Index,IndexLeft)}1 :- node(Index).
-0{right(Index,IndexRight) : avail_right(Index,IndexRight)}1 :- node(Index).
+0{left(Index,IndexLeft) : avail_left(Index,IndexLeft)}1 :- internal(Index).
+0{right(Index,IndexRight) : avail_right(Index,IndexRight)}1 :- internal(Index).
 
 % parent indexes must be smaller than child indexes
 :- left(Index,IndexLeft), IndexLeft <= Index.
@@ -59,11 +60,11 @@ avail_right(Index,IndexRight):-
 :- left(Index0,X), left(Index1,X), Index0 != Index1.
 :- right(Index0,X), right(Index1,X), Index0 != Index1.
 
-terminal(Index):- node(Index), not left(Index,_), not right(Index,_).
-:- terminal(1).
-internal(Index):- node(Index), right(Index,_), left(Index,_).
-% :- #count{N : terminal(N)} < 2.
 :- node(Index), not internal(Index), not terminal(Index).
+
+% at least one even and one odd terminal node
+:- #count{N : terminal(N), N\2 = 0} = 0.
+:- #count{N : terminal(N), N\2 = 1} = 0.
 
 
 % connectivity constraints
@@ -74,7 +75,7 @@ internal(Index):- node(Index), right(Index,_), left(Index,_).
 % :- index(_,Index), not reachable(Index).
 % can I replace the reachable construction with a constraint over the number of terminals?
 % leaves = 1 + internal nodes
-:- #count{N : terminal(N)} = CT, #count{N : internal(N)} = CI, CT != CI + 1.
+% :- #count{N : terminal(N)} = CT, #count{N : internal(N)} = CI, CT != CI + 1.
 
 % class assignments
 class(Index,positive):- terminal(Index), left(_,Index).
@@ -88,11 +89,17 @@ class(Index,negative):- terminal(Index), right(_,Index).
 1{internal_feature(Index,Feature) : feature(Feature)}1:- internal(Index).
 % assume a feature is used only once -- this is not correct, prunes too much
 % :- internal_feature(Index0,Feature), internal_feature(Index1,Feature), Index0 != Index1.
-% pruning: a feature cannot be used more than > internal nodes - 1 times, can we improve this?
+% an internal feature can be used only once along a path from the root to a leaf
+:- reaches(E, Node0),
+    reaches(E, Node1),
+    internal_feature(Node0, Feature),
+    internal_feature(Node1, Feature),
+    Node0 != Node1.
+% more pruning: a node and its children cannot have the same feature
+:- left(Node,Child), internal_feature(Node, Feature), internal_feature(Child, Feature).
+:- right(Node,Child), internal_feature(Node, Feature), internal_feature(Child, Feature).
 
 % pruning: the leaves cannot have all the same class, otherwise the tree is useless
-% :- #count{Index : class(Index,positive)} = 0.
-% :- #count{Index : class(Index,negative)} = 0.
 :- not class(_,positive).
 :- not class(_,negative).
 
@@ -120,14 +127,15 @@ classified(E, Class) :-
     terminal(Terminal),
     class(Terminal, Class).
 
-% Every example must have its target classification
-:- target(E, Expected),
-   not classified(E, Expected).
+% Every example must have its target classification: prunes no classification and incorrect
+:- target(E, Expected), not classified(E, Expected).
+% No example may have an incorrect classification: prunes only incorrect classifications
+% not enough alone but this makes much faster the solving
+:- target(E, Expected), classified(E, Actual), Actual != Expected.
 
-% No example may have an incorrect classification
-:- classified(E, Actual),
-   target(E, Expected),
-   Actual != Expected.
+% % % weak constraints version
+% :~ target(E, Expected), not classified(E, Expected).[1@1,E]
+% :~ target(E, Expected), classified(E, Actual), Actual != Expected.[1@1,E]
 
 % #show classified/2.
 % prune: two nodes in the same paths cannot have the same feature - this makes everything slow
