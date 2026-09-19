@@ -6,7 +6,7 @@
 % N = 4 -> 2^(4+1) - 1 = 31
 
 % the size is the total number of nodes (internal + leaves)
-% size(15).
+size(15).
 node(1..S):- size(S).
 
 even(N):- node(N), N\2 = 0.
@@ -29,7 +29,6 @@ terminal(N):- node(N), not internal(N).
 % :- n_terminal_odd(NO), n_terminal_even(NE), NO > NE + 1.
 
 
-
 % left child of a node: even([index+1, min(2*index, size-1)])
 avail_left(Index,IndexLeft):-
     size(Size),
@@ -37,34 +36,48 @@ avail_left(Index,IndexLeft):-
     even(IndexLeft),
     IndexLeft >= Index + 1,
     IndexLeft <= min(2*Index,Size-1).      
-avail_right(Index,IndexRight):-
-    size(Size),
-    internal(Index),
-    odd(IndexRight),
-    IndexRight >= Index + 2,
-    IndexRight <= min(2*Index+1,Size).    
-    % IndexRight <= min(2*Index+1,size).
+% avail_right(Index,IndexRight):-
+%     size(Size),
+%     internal(Index),
+%     odd(IndexRight),
+%     IndexRight >= Index + 2,
+%     IndexRight <= min(2*Index+1,Size).    
+%     % IndexRight <= min(2*Index+1,size).
 
 
         
 % left and right child for each node
-0{left(Index,IndexLeft) : avail_left(Index,IndexLeft)}1 :- internal(Index).
-0{right(Index,IndexRight) : avail_right(Index,IndexRight)}1 :- internal(Index).
+1{left(Index,IndexLeft) : avail_left(Index,IndexLeft)}1 :- internal(Index).
+% 0{right(Index,IndexRight) : avail_right(Index,IndexRight)}1 :- internal(Index).
+% improvement: once I get the left index I, the right is fixed as I+1 
+right(Index,IndexRight):- left(Index,IndexLeft), IndexRight = IndexLeft + 1. %, avail_right(Index,IndexRight).
 
 % parent indexes must be smaller than child indexes
 :- left(Index,IndexLeft), IndexLeft <= Index.
-:- right(Index,IndexRight), IndexRight <= Index.
+% :- right(Index,IndexRight), IndexRight <= Index. % superfluous as right is always left + 1
 
-:- node(Node), #count{X : left(Node,X)} > 1.
-:- node(Node), #count{X : right(Node,X)} > 1.
+% :- node(Node), #count{X : left(Node,X)} > 1. % useless as left is unique by construction
+% :- node(Node), #count{X : right(Node,X)} > 1. % useless as right is unique by construction
+% an index cannot be reused
 :- left(Index0,X), left(Index1,X), Index0 != Index1.
-:- right(Index0,X), right(Index1,X), Index0 != Index1.
+% :- right(Index0,X), right(Index1,X), Index0 != Index1. % useless as right is always left + 1
 
-:- node(Index), not internal(Index), not terminal(Index).
+% useless by construction as internal and terminal are complementary
+% :- node(Index), not internal(Index), not terminal(Index).
 
 % at least one even and one odd terminal node
 :- #count{N : terminal(N), N\2 = 0} = 0.
 :- #count{N : terminal(N), N\2 = 1} = 0.
+
+% exactly one parent for each node (except the root)
+parent(C) :- left(_, C).
+parent(C) :- right(_, C).
+
+:- node(C), C > 1, not parent(C).
+:- node(C), C > 1,
+   #count { P : left(P, C) } = PL,
+   #count { P : right(P, C) } = PR,
+   PL + PR != 1.
 
 
 % connectivity constraints
@@ -87,17 +100,34 @@ class(Index,negative):- terminal(Index), right(_,Index).
 
 % each internal node has exactly one feature
 1{internal_feature(Index,Feature) : feature(Feature)}1:- internal(Index).
+% a feature can be used at most (i + 1) / 2 with i internal nodes
+% max_feature_same_node(M):- n_internal(N), M = (N+1)/2. - is this sound?
+% :- max_feature_same_node(M), feature(Feature), #count{N : internal_feature(N,Feature)} > M. 
 % assume a feature is used only once -- this is not correct, prunes too much
 % :- internal_feature(Index0,Feature), internal_feature(Index1,Feature), Index0 != Index1.
+
 % an internal feature can be used only once along a path from the root to a leaf
-:- reaches(E, Node0),
-    reaches(E, Node1),
-    internal_feature(Node0, Feature),
-    internal_feature(Node1, Feature),
-    Node0 != Node1.
-% more pruning: a node and its children cannot have the same feature
-:- left(Node,Child), internal_feature(Node, Feature), internal_feature(Child, Feature).
-:- right(Node,Child), internal_feature(Node, Feature), internal_feature(Child, Feature).
+% :- reaches(E, Node0),
+%     reaches(E, Node1),
+%     internal_feature(Node0, Feature),
+%     internal_feature(Node1, Feature),
+%     Node0 != Node1.
+ancestor(A, B) :- left(A, B).
+ancestor(A, B) :- right(A, B).
+ancestor(A, C) :- ancestor(A, B), left(B, C).
+ancestor(A, C) :- ancestor(A, B), right(B, C).
+
+:- ancestor(A, B),
+   internal_feature(A, F),
+   internal_feature(B, F).
+
+% % more pruning: a node and its children cannot have the same feature - included in the above constraint, but maybe it helps
+% :- left(Node,Child), internal_feature(Node, Feature), internal_feature(Child, Feature).
+% :- right(Node,Child), internal_feature(Node, Feature), internal_feature(Child, Feature).
+% % the two children of a node cannot have the same feature - this is not correct, prunes too much
+% % :- left(Node,ChildL), right(Node,ChildR), internal_feature(ChildL, Feature), internal_feature(ChildR, Feature).
+
+
 
 % pruning: the leaves cannot have all the same class, otherwise the tree is useless
 :- not class(_,positive).
@@ -133,92 +163,16 @@ classified(E, Class) :-
 % not enough alone but this makes much faster the solving
 :- target(E, Expected), classified(E, Actual), Actual != Expected.
 
-% % % weak constraints version
-% :~ target(E, Expected), not classified(E, Expected).[1@1,E]
+% % % weak constraint version
 % :~ target(E, Expected), classified(E, Actual), Actual != Expected.[1@1,E]
+% missclassified(N):- N = #count{E : target(E, Expected), classified(E, Actual), Actual != Expected}.
+% #show missclassified/1.
 
-% #show classified/2.
 % prune: two nodes in the same paths cannot have the same feature - this makes everything slow
 % :- reaches(E, Node0), reaches(E, Node1), internal_feature(Node0, Feature), internal_feature(Node1, Feature), Node0 != Node1.
 
 % TODO improvement: impose a depth limit?
 
-%%%%%%%%%% below wrong
-% % compute classification of examples based on the tree structure and feature assignments
-% % if an example reaches a terminal node, it is classified according to the class of that node
-% % assume right -> neg, left -> pos
-% discriminated(Feature,NodeIndex,positive):-
-%     % feature(Feature),
-%     index(_,NodeIndex),
-%     left(NodeParent,NodeIndex),
-%     internal_feature(NodeParent,Feature).
-% discriminated(Feature,NodeIndex,negative):-
-%     % feature(Feature),
-%     index(_,NodeIndex),
-%     right(NodeParent,NodeIndex),
-%     internal_feature(NodeParent,Feature).
-
-% discriminated(Feature,NodeIndexTerminal,Class):-
-%     terminal(NodeIndexTerminal),
-%     connected(Node,NodeIndexTerminal),
-%     discriminated(Feature,Node,Class).
-
-% % check consistency - should not prune
-% :- discriminated(F,N,positive), discriminated(F,N,negative).
-
-% % in the leaves I want all discriminated along the path towards the leaf
-% connected(A,B):- left(A,B).
-% connected(A,B):- right(A,B).
-% connected(A,C):- left(A,B), connected(B,C).
-% connected(A,C):- right(A,B), connected(B,C).
-
-
-% % % impose all examples are classified ok
-% % discriminated_at(Example,Feature,Class,TerminalIndex):-
-% %     example(Example,Feature,Class),
-% %     discriminated(Feature,TerminalIndex,Class),
-% %     terminal(TerminalIndex),
-% %     class(TerminalIndex,TargetClass), % same class
-% %     target(Example,TargetClass).
-
-% % :- example(E,_,_), not discriminated_at(E,_,_,_).
-
-% % cannot fall into a terminal
-% cannot(Example,T) :- %,Feature):-
-%     terminal(T),
-%     example(Example,Feature,C0),
-%     discriminated(Feature,T,C1),
-%     C0 != C1.
-% cannot(Example,T) :- %,Feature):-
-%     terminal(T),
-%     class(T,TC0),
-%     example(Example,_,_),
-%     target(Example,TC1),
-%     TC0 != TC1.
-
-% n_terminals(N):- N = #count{X : terminal(X)}.
-% % means that there should be at least one terminal node that classifies the example correctly
-% ccannot(NT):- example(E,_,_), #count{ X : cannot(E,X)} = NT.
-% :- ccannot(NT), n_terminals(NT).
-
-% #show c/3.
-% #show cannot/2.
-% #show n_terminals/1.
-% #show ccannot/1.
-
-
-% discriminated_at(e1,f3,negative,5)
-% discriminated_at(e2,f4,negative,5)
-% discriminated_at(e3,f4,positive,2)
-
-% minimize the number of features used - useless by now as the three is fixed
-% :~ internal_feature(_,Feature). [1@1,Feature]
-
-% #show may_fall_into_terminal/2.
-% #show discriminated_at/4.
-% #show discriminated_at(e1,Feature,Class,TerminalIndex) : discriminated_at(e1,Feature,Class,TerminalIndex).
-
-% #show connected/2.
 
 % % #show internal/1.
 % % #show index/2.
