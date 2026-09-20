@@ -5,8 +5,10 @@
 % N = 3 -> 2^(3+1) - 1 = 15
 % N = 4 -> 2^(4+1) - 1 = 31
 
+% --------------------- Tree construction
+
 % the size is the total number of nodes (internal + leaves)
-size(15).
+% size(15).
 node(1..S):- size(S).
 
 even(N):- node(N), N\2 = 0.
@@ -94,13 +96,16 @@ parent(C) :- right(_, C).
 % leaves = 1 + internal nodes
 % :- #count{N : terminal(N)} = CT, #count{N : internal(N)} = CI, CT != CI + 1.
 
-% class assignments
-class(Index,positive):- terminal(Index), left(_,Index).
-class(Index,negative):- terminal(Index), right(_,Index).
+% % class assignments - this is not correct
+% %  the class of a terminal node is determined by the examples that reach it, not by the index
+% class(Index,positive):- terminal(Index), left(_,Index).
+% class(Index,negative):- terminal(Index), right(_,Index).
 
 % feature assignments
 
 % feature(F):- example(_,F,_).
+
+% ----------------------- Feature assignment to internal nodes
 
 % each internal node has exactly one feature
 1{internal_feature(Index,Feature) : feature(Feature)}1:- internal(Index).
@@ -131,11 +136,7 @@ ancestor(A, C) :- ancestor(A, B), right(B, C).
 % % the two children of a node cannot have the same feature - this is not correct, prunes too much
 % % :- left(Node,ChildL), right(Node,ChildR), internal_feature(ChildL, Feature), internal_feature(ChildR, Feature).
 
-
-
-% pruning: the leaves cannot have all the same class, otherwise the tree is useless
-:- not class(_,positive).
-:- not class(_,negative).
+% ------------------ Terminal nodes class assignment
 
 % The root is reached by every example
 reaches(E, 1) :-
@@ -155,17 +156,29 @@ reaches(E, Child) :-
     internal_feature(Parent, Feature),
     example(E, Feature, negative).
 
-% Classification at a reached terminal
-classified(E, Class) :-
-    reaches(E, Terminal),
-    terminal(Terminal),
-    class(Terminal, Class).
+% % Classification at a reached terminal
+% classified(E, Class) :-
+%     reaches(E, Terminal),
+%     terminal(Terminal),
+%     class(Terminal, Class).
+% % Every example must have its target classification: prunes no classification and incorrect
+% :- target(E, Expected), not classified(E, Expected).
+% % No example may have an incorrect classification: prunes only incorrect classifications
+% % not enough alone but this makes much faster the solving
+% :- target(E, Expected), classified(E, Actual), Actual != Expected.
 
-% Every example must have its target classification: prunes no classification and incorrect
-:- target(E, Expected), not classified(E, Expected).
-% No example may have an incorrect classification: prunes only incorrect classifications
-% not enough alone but this makes much faster the solving
-:- target(E, Expected), classified(E, Actual), Actual != Expected.
+% pruning: the leaves cannot have all the same class, otherwise the tree is useless
+:- not class(_,positive).
+:- not class(_,negative).
+
+% the terminal node gets the class of the example
+class(Terminal, Class) :- terminal(Terminal), reaches(E, Terminal), target(E, Class).
+% a terminal node cannot have two different classes
+:- class(T,C0), class(T,C1), C0 != C1.
+% all examples must reach a terminal node
+at_terminal(E, T) :- reaches(E, T), terminal(T).
+:- example(E,_,_), not at_terminal(E, _).
+% :- target(E0,T0), target(E1,T1), E0 != E1, at_terminal(E0,T), at_terminal(E1,T), T0 != T1.
 
 % % % weak constraint version
 % :~ target(E, Expected), classified(E, Actual), Actual != Expected.[1@1,E]
