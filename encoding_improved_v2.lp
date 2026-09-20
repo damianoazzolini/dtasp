@@ -18,8 +18,11 @@ odd(N):- node(N), N\2 = 1.
 % additional -1 as 1 is internal by definition
 n_internal(N):- V = #max{ A : node(A)}, N = ((V-1)/2) - 1.
 internal(1).
-V{internal(N) : node(N), N != 1}V :- n_internal(V).
+% the last and the second last nodes are always terminal
+V{internal(N) : node(N), N != 1, size(S), N < S-1}V :- n_internal(V).
 terminal(N):- node(N), not internal(N).
+% terminal(N):- size(N).
+% terminal(N):- size(S), N = S - 1.
 
 % The number of terminal nodes must be balanced between even and odd indexes
 % is this correct?
@@ -47,7 +50,8 @@ avail_left(Index,IndexLeft):-
 
         
 % left and right child for each node
-1{left(Index,IndexLeft) : avail_left(Index,IndexLeft)}1 :- internal(Index).
+1{left(Index,IndexLeft) : avail_left(Index,IndexLeft)}1 :- internal(Index), Index > 1.
+left(1,2).
 % 0{right(Index,IndexRight) : avail_right(Index,IndexRight)}1 :- internal(Index).
 % improvement: once I get the left index I, the right is fixed as I+1 
 right(Index,IndexRight):- left(Index,IndexLeft), IndexRight = IndexLeft + 1. %, avail_right(Index,IndexRight).
