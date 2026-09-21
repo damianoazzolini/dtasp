@@ -8,7 +8,7 @@
 % --------------------- Tree construction
 
 % the size is the total number of nodes (internal + leaves)
-% size(15).
+size(15).
 node(1..S):- size(S).
 
 even(N):- node(N), N\2 = 0.
@@ -76,10 +76,10 @@ right(Index,IndexRight):- left(Index,IndexLeft), IndexRight = IndexLeft + 1. %, 
 :- #count{N : terminal(N), N\2 = 1} = 0.
 
 % exactly one parent for each node (except the root)
-parent(C) :- left(_, C).
-parent(C) :- right(_, C).
+% parent(C) :- left(_, C).
+% parent(C) :- right(_, C).
 
-:- node(C), C > 1, not parent(C).
+% :- node(C), C > 1, not parent(C).
 :- node(C), C > 1,
    #count { P : left(P, C) } = PL,
    #count { P : right(P, C) } = PR,
@@ -109,8 +109,8 @@ parent(C) :- right(_, C).
 
 % each internal node has exactly one feature
 1{internal_feature(Index,Feature) : feature(Feature)}1:- internal(Index).
-% a feature can be used at most (i + 1) / 2 with i internal nodes
-% max_feature_same_node(M):- n_internal(N), M = (N+1)/2. - is this sound?
+% % a feature can be used at most (i + 1) / 2 with i internal nodes - correct but heavy
+% max_feature_same_node(M):- n_internal(N), M = (N+1)/2.
 % :- max_feature_same_node(M), feature(Feature), #count{N : internal_feature(N,Feature)} > M. 
 % assume a feature is used only once -- this is not correct, prunes too much
 % :- internal_feature(Index0,Feature), internal_feature(Index1,Feature), Index0 != Index1.
