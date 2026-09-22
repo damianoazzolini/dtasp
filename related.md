@@ -26,6 +26,10 @@ Dataset | Optimal | Source
 mux6 | 15 (# nodes) | Learning Optimal Decision Trees with SAT
 corral | 13 (# nodes) | Learning Optimal Decision Trees with SAT
 
+# How to call
+```
+time timeout 30 clingo encoding_improved_v2.lp datasets/mux6.lp --const size=7 --const max_depth=2
+```
 
 # Current Results
 encoding_improved_v2.lp
