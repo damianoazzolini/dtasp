@@ -8,8 +8,12 @@
 % --------------------- Tree construction
 
 % the size is the total number of nodes (internal + leaves)
-size(15).
-node(1..S):- size(S).
+% size(15).
+% size(31).
+#const size=1.
+#const max_depth=4.
+% node(1..S):- size(S).
+node(1..size).
 
 even(N):- node(N), N\2 = 0.
 odd(N):- node(N), N\2 = 1.
@@ -21,7 +25,7 @@ odd(N):- node(N), N\2 = 1.
 n_internal(N):- V = #max{ A : node(A)}, N = ((V-1)/2) - 1.
 internal(1).
 % the last and the second last nodes are always terminal
-V{internal(N) : node(N), N != 1, size(S), N < S-1}V :- n_internal(V).
+V{internal(N) : node(N), N != 1, N < size-1}V :- n_internal(V).
 terminal(N):- node(N), not internal(N).
 % terminal(N):- size(N).
 % terminal(N):- size(S), N = S - 1.
@@ -36,11 +40,11 @@ terminal(N):- node(N), not internal(N).
 
 % left child of a node: even([index+1, min(2*index, size-1)])
 avail_left(Index,IndexLeft):-
-    size(Size),
+    % size(Size),
     internal(Index),
     even(IndexLeft),
     IndexLeft >= Index + 1,
-    IndexLeft <= min(2*Index,Size-1).      
+    IndexLeft <= min(2*Index,size-1).      
 % avail_right(Index,IndexRight):-
 %     size(Size),
 %     internal(Index),
@@ -59,7 +63,7 @@ left(1,2).
 right(Index,IndexRight):- left(Index,IndexLeft), IndexRight = IndexLeft + 1. %, avail_right(Index,IndexRight).
 
 % parent indexes must be smaller than child indexes
-:- left(Index,IndexLeft), IndexLeft <= Index.
+% :- left(Index,IndexLeft), IndexLeft <= Index.
 % :- right(Index,IndexRight), IndexRight <= Index. % superfluous as right is always left + 1
 
 % :- node(Node), #count{X : left(Node,X)} > 1. % useless as left is unique by construction
@@ -139,20 +143,22 @@ ancestor(A, C) :- ancestor(A, B), right(B, C).
 % ------------------ Terminal nodes class assignment
 
 % The root is reached by every example
-reaches(E, 1) :-
+reaches(E, 1, 1) :-
     example(E, _, _).
 
 % A positive feature value follows the left branch - also store the length?
-reaches(E, Child) :-
-    reaches(E, Parent),
+reaches(E, Child, Depth) :-
+    reaches(E, Parent, DepthParent),
     left(Parent, Child),
+    Depth = DepthParent + 1,
     internal_feature(Parent, Feature),
     example(E, Feature, positive).
 
 % A negative feature value follows the right branch
-reaches(E, Child) :-
-    reaches(E, Parent),
+reaches(E, Child, Depth) :-
+    reaches(E, Parent, DepthParent),
     right(Parent, Child),
+    Depth = DepthParent + 1,
     internal_feature(Parent, Feature),
     example(E, Feature, negative).
 
@@ -172,13 +178,15 @@ reaches(E, Child) :-
 :- not class(_,negative).
 
 % the terminal node gets the class of the example
-class(Terminal, Class) :- terminal(Terminal), reaches(E, Terminal), target(E, Class).
+class(Terminal, Class) :- terminal(Terminal), reaches(E, Terminal, _), target(E, Class).
 % a terminal node cannot have two different classes
-:- class(T,C0), class(T,C1), C0 != C1.
+% :- class(T,C0), class(T,C1), C0 != C1. % re-enable to have no incorrect classification
+% :~ class(T,C0), class(T,C1), C0 != C1.[1@1,T]
 % all examples must reach a terminal node
-at_terminal(E, T) :- reaches(E, T), terminal(T).
+at_terminal(E, T) :- reaches(E, T, _), terminal(T).
 :- example(E,_,_), not at_terminal(E, _).
 % :- target(E0,T0), target(E1,T1), E0 != E1, at_terminal(E0,T), at_terminal(E1,T), T0 != T1.
+:~ at_terminal(E,T), target(E,Class), class(T,Class0), Class != Class0.[1@1,E]
 
 % % % weak constraint version
 % :~ target(E, Expected), classified(E, Actual), Actual != Expected.[1@1,E]
@@ -188,7 +196,9 @@ at_terminal(E, T) :- reaches(E, T), terminal(T).
 % prune: two nodes in the same paths cannot have the same feature - this makes everything slow
 % :- reaches(E, Node0), reaches(E, Node1), internal_feature(Node0, Feature), internal_feature(Node1, Feature), Node0 != Node1.
 
-% TODO improvement: impose a depth limit?
+% Impose a depth limit - this is the number of test + 1
+% max_depth(4).
+:- reaches(E, Node, Depth), Depth > max_depth + 1. % +1 as it involves also terminals
 
 
 % % #show internal/1.
